@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Data Pipeline: execute.py + CI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121735;
+      --muted: #9fb0ff;
+      --text: #e9ecff;
+      --accent: #6be3ff;
+      --good: #8dfab8;
+      --warn: #ffd166;
+      --bad: #ff7b7b;
+      --border: #222a55;
+      --code: #0e132a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: radial-gradient(1200px 900px at 10% 10%, #12183a 0%, #0b1020 40%, #0b1020 100%);
+    }
+    header {
+      padding: 28px 20px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 18px 20px 40px;
+    }
+    h1 {
+      font-size: 1.6rem;
+      margin: 0 0 8px 0;
+      letter-spacing: 0.2px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin: 0 0 10px 0;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.04));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      grid-column: span 12;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    @media (min-width: 940px) {
+      .card.span-6 { grid-column: span 6; }
+      .card.span-4 { grid-column: span 4; }
+      .card.span-8 { grid-column: span 8; }
+    }
+    h2 {
+      font-size: 1.1rem;
+      margin: 0 0 10px 0;
+    }
+    .ok { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+    .file {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--code);
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .filehead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.05));
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color: var(--muted);
+    }
+    .btns {
+      display: flex;
+      gap: 8px;
+    }
+    button {
+      appearance: none;
+      background: #1a2046;
+      color: var(--text);
+      border: 1px solid #2a3270;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:hover { background: #232a58; }
+    pre {
+      margin: 0;
+      padding: 12px;
+      max-height: 420px;
+      overflow: auto;
+      line-height: 1.35;
+      font-size: 13px;
+      color: #d8defe;
+      tab-size: 2;
+      white-space: pre;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .steps ol { margin: 0; padding-left: 18px; }
+    .steps li { margin: 8px 0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .tip {
+      font-size: 0.92rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .kbd {
+      border: 1px solid var(--border);
+      border-bottom-width: 3px;
+      background: #10163a;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Data pipeline: execute.py fix, CSV conversion, and GitHub Pages CI</h1>
+      <p class="sub">Ready-to-copy files below. Commit them to your repo and push to trigger CI that lints with ruff, runs execute.py to produce result.json, and publishes it via GitHub Pages.</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="cards">
+      <div class="card span-8">
+        <h2>1) Fixed execute.py (Python 3.11+, Pandas 2.3)</h2>
+        <p class="tip">This version fixes the non-trivial bug(s), computes metrics, and prints JSON to stdout. It avoids the <span class="mono">revenew</span> typo and works with Pandas 2.3.</p>
+        <div class="file">
+          <div class="filehead">
+            <span>/execute.py</span>
+            <div class="btns">
+              <button onclick="copyCode('code-exec')">Copy</button>
+              <button onclick="downloadFile('execute.py', 'code-exec')">Download</button>
+            </div>
+          </div>
+          <pre><code id="code-exec">#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, List
+
+import pandas as pd
+
+
+def compute_metrics(df: pd.DataFrame) -> Dict[str, Any]:
+    df = df.copy()
+
+    # Compute revenue
+    df["revenue"] = df["units"] * df["price"]
+
+    # Basic counts
+    row_count = int(len(df))
+    regions_count = int(df["region"].nunique())
+
+    # Top N products by revenue
+    n = 3
+    top_products = (
+        df.groupby("product", dropna=False)["revenue"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(n)
+        .reset_index()
+    )
+    top_products_list = [
+        {"product": str(row["product"]), "revenue": float(row["revenue"])}
+        for _, row in top_products.iterrows()
+    ]
+
+    # Rolling 7-day average of daily revenue per region (take last value per region)
+    df["date"] = pd.to_datetime(df["date"], utc=False, errors="coerce")
+    daily_rev = (
+        df.groupby(["region", "date"], dropna=False)["revenue"]
+        .sum()
+        .reset_index()
+        .sort_values(["region", "date"])
+    )
+    daily_rev["rolling_7d_avg_revenue"] = (
+        daily_rev.groupby("region", dropna=False)["revenue"]
+        .transform(lambda s: s.rolling(window=7, min_periods=1).mean())
+    )
+    last_vals = (
+        daily_rev.groupby("region", dropna=False)
+        .tail(1)[["region", "rolling_7d_avg_revenue"]]
+        .reset_index(drop=True)
+    )
+    rolling_list = [
+        {
+            "region": str(row["region"]),
+            "rolling_7d_avg_revenue": float(row["rolling_7d_avg_revenue"]),
+        }
+        for _, row in last_vals.iterrows()
+    ]
+
+    return {
+        "row_count": row_count,
+        "regions_count": regions_count,
+        "top_n_products_by_revenue": top_products_list,
+        "rolling_7d_revenue_by_region": rolling_list,
+    }
+
+
+def main() -> None:
+    # Prefer Excel; fallback to CSV for local dev if Excel isn't present.
+    try:
+        df = pd.read_excel("data.xlsx", engine="openpyxl")
+    except Exception:
+        df = pd.read_csv("data.csv")
+
+    result = compute_metrics(df)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+        </div>
+      </div>
+
+      <div class="card span-4">
+        <h2>2) CI workflow: ruff, execute.py, and GitHub Pages</h2>
+        <p class="tip">On push, this workflow runs ruff, executes <span class="mono">python execute.py &gt; result.json</span>, and publishes <span class="mono">result.json</span> to GitHub Pages. It also creates/updates <span class="mono">data.csv</span> from <span class="mono">data.xlsx</span> and commits it if needed.</p>
+        <div class="file">
+          <div class="filehead">
+            <span>/.github/workflows/ci.yml</span>
+            <div class="btns">
+              <button onclick="copyCode('code-ci')">Copy</button>
+              <button onclick="downloadFile('.github-workflows-ci.yml', 'code-ci')">Download</button>
+            </div>
+          </div>
+          <pre><code id="code-ci">name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pandas==2.3.0" openpyxl ruff
+
+      - name: Ensure data.csv exists and matches data.xlsx
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "data.xlsx" ]]; then
+            python - << 'PY'
+import pandas as pd
+df = pd.read_excel("data.xlsx", engine="openpyxl")
+df.to_csv("data.csv", index=False)
+print("Wrote data.csv from data.xlsx")
+PY
+            # Commit only if changed
+            if [[ -n "$(git status --porcelain data.csv)" ]]; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add data.csv
+              git commit -m "CI: generate/update data.csv from data.xlsx"
+              git push
+            fi
+          else
+            echo "data.xlsx not found; skipping CSV generation."
+          fi
+
+      - name: Ruff version
+        run: ruff --version
+
+      - name: Ruff check
+        run: ruff check .
+        continue-on-error: true
+
+      - name: Run execute.py to produce result.json
+        run: |
+          python execute.py > result.json
+          test -s result.json && echo "result.json generated."
+
+      - name: Prepare Pages artifact
+        run: |
+          mkdir -p public
+          cp result.json public/result.json
+          echo "Result is in public/result.json"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+</code></pre>
+        </div>
+        <p class="tip">After the workflow runs, your published result will be at: <span class="mono">https://&lt;owner&gt;.github.io/&lt;repo&gt;/result.json</span></p>
+      </div>
+
+      <div class="card span-6">
+        <h2>3) .gitignore (keeps result.json out of the repo)</h2>
+        <p class="tip">Not strictly required, but recommended to ensure <span class="mono">result.json</span> is only created in CI and not committed locally.</p>
+        <div class="file">
+          <div class="filehead">
+            <span>/.gitignore</span>
+            <div class="btns">
+              <button onclick="copyCode('code-gi')">Copy</button>
+              <button onclick="downloadFile('.gitignore', 'code-gi')">Download</button>
+            </div>
+          </div>
+          <pre><code id="code-gi"># Build / cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env
+.envrc
+
+# Local artifacts
+result.json
+</code></pre>
+        </div>
+      </div>
+
+      <div class="card span-6 steps">
+        <h2>4) How to apply these changes</h2>
+        <ol>
+          <li>Create the files shown above in your repo:
+            <ul>
+              <li>execute.py (replace existing with the fixed version)</li>
+              <li>.github/workflows/ci.yml</li>
+              <li>.gitignore (optional but recommended)</li>
+              <li>Ensure data.xlsx is present (from the provided attachment)</li>
+            </ul>
+          </li>
+          <li>Commit your changes:
+            <div class="mono tip">
+              git add execute.py .github/workflows/ci.yml .gitignore<br/>
+              git commit -m "Fix execute.py, add CI for ruff + result.json Pages deploy"<br/>
+              git push
+            </div>
+          </li>
+          <li>CI will:
+            <ul>
+              <li>Generate and commit data.csv from data.xlsx</li>
+              <li>Run ruff and print findings</li>
+              <li>Run python execute.py &gt; result.json</li>
+              <li>Publish result.json to GitHub Pages</li>
+            </ul>
+          </li>
+        </ol>
+        <p class="tip">You can also generate data.csv locally for inspection:
+          <span class="kbd">python -c "import pandas as pd; pd.read_excel('data.xlsx', engine='openpyxl').to_csv('data.csv', index=False)"</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function copyCode(id) {
+      const el = document.getElementById(id);
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard');
+      }, () => alert('Copy failed'));
+    }
+    function downloadFile(filename, id) {
+      const text = document.getElementById(id).innerText;
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
